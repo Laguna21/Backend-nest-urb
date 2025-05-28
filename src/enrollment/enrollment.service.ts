@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Enrollment } from './enrollment.entity';
@@ -12,6 +16,18 @@ export class EnrollmentService {
   ) {}
 
   async create(userId: string, courseId: string): Promise<Enrollment> {
+    const existingEnrollment = await this.enrollmentRepository.findOne({
+      where: {
+        user: { id: userId },
+        course: { id: courseId },
+        status: Status.Active,
+      },
+    });
+
+    if (existingEnrollment) {
+      throw new ConflictException('El usuario ya está inscrito en este curso');
+    }
+
     const enrollment = this.enrollmentRepository.create({
       user: { id: userId },
       course: { id: courseId },
@@ -26,5 +42,29 @@ export class EnrollmentService {
       where: { user: { id: userId } },
       relations: ['course'],
     });
+  }
+
+  async updateEnrollmentStatus(
+    enrollmentId: string,
+    newStatus: Status,
+  ): Promise<Enrollment> {
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { id: enrollmentId },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Inscripción no encontrada');
+    }
+
+    enrollment.status = newStatus;
+    return this.enrollmentRepository.save(enrollment);
+  }
+
+  async deleteEnrollment(enrollmentId: string): Promise<void> {
+    const result = await this.enrollmentRepository.delete(enrollmentId);
+
+    if (result.affected === 0) {
+      throw new NotFoundException('Inscripción no encontrada');
+    }
   }
 }
